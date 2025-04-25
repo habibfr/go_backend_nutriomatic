@@ -52,7 +52,7 @@ CREATE TABLE `products` (
   `updatedat` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `store_id` varchar(36) DEFAULT NULL,
   `pt_id` varchar(36) DEFAULT NULL,
-  `product_grade` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `product_grade` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`product_id`),
   KEY `store_id` (`store_id`),
   KEY `pt_id` (`pt_id`),

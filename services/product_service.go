@@ -5,6 +5,12 @@ import (
 	"golang-template/middleware"
 	"golang-template/models"
 	"golang-template/repository"
+
+	"fmt"
+	"io"
+	// "mime/multipart"
+	"path/filepath"
+
 	"net/http"
 	"os"
 	"strconv"
@@ -13,6 +19,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
+	// "math/rand/v2" // For Go 1.22+
+	// OR
+	"math/rand"  // For Go 1.20-1.21
+	// "time"
 )
 
 type ProductService interface {
@@ -134,23 +144,348 @@ func ParseProductForm(c echo.Context) (*dto.ProductRegisterForm, error) {
 	}, nil
 }
 
+// func (service *productService) CreateProduct(c echo.Context) error {
+// 	productForm, err := ParseProductForm(c)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// 	}
+
+// 	imagePath, err := service.uploader.ProcessImage(c)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+// 	}
+
+// 	err = godotenv.Load(".env")
+// 	if err != nil {
+// 		return err
+// 	}
+// 	realImagePath := os.Getenv("IMAGE_PATH") + imagePath
+
+// 	UserToken, err := service.tokenRepo.UserToken(middleware.GetToken(c))
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
+// 	}
+
+// 	store, err := service.storeService.GetStoreByUserId(UserToken.ID)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Store not found")
+// 	}
+
+// 	pt_id, err := service.ptService.GetProductTypeIdByType(productForm.PT_Type)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Product type not found")
+// 	}
+// 	product_id := uuid.New().String()
+
+// 	product := models.Product{
+// 		PRODUCT_ID:           product_id,
+// 		PRODUCT_NAME:         productForm.ProductName,
+// 		PRODUCT_PRICE:        productForm.ProductPrice,
+// 		PRODUCT_DESC:         productForm.ProductDesc,
+// 		PRODUCT_ISSHOW:       0,
+// 		PRODUCT_LEMAKTOTAL:   productForm.ProductLemakTotal,
+// 		PRODUCT_PROTEIN:      productForm.ProductProtein,
+// 		PRODUCT_KARBOHIDRAT:  productForm.ProductKarbohidrat,
+// 		PRODUCT_GARAM:        productForm.ProductGaram,
+// 		PRODUCT_SERVINGSIZE:  productForm.ProductServingSize,
+// 		PRODUCT_PICTURE:      realImagePath,
+// 		PRODUCT_EXPSHOW:      time.Now(),
+// 		PRODUCT_ENERGI:       productForm.ProductEnergi,
+// 		PRODUCT_GULA:         productForm.ProductGula,
+// 		PRODUCT_SATURATEDFAT: productForm.ProductSaturatedFat,
+// 		PRODUCT_FIBER:        productForm.ProductFiber,
+// 		CreatedAt:            time.Now(),
+// 		UpdatedAt:            time.Now(),
+// 		STORE_ID:             store.STORE_ID,
+// 		PT_ID:                pt_id,
+// 	}
+
+// 	err = service.productRepo.CreateProduct(&product)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	url := os.Getenv("PYTHON_API") + "/grade"
+
+// 	requestData := &dto.ProductRequest{
+// 		Energy:       product.PRODUCT_ENERGI,
+// 		Protein:      product.PRODUCT_PROTEIN,
+// 		Fat:          product.PRODUCT_LEMAKTOTAL,
+// 		Carbs:        product.PRODUCT_KARBOHIDRAT,
+// 		Sugar:        product.PRODUCT_GULA,
+// 		Salt:         product.PRODUCT_GARAM,
+// 		SaturatedFat: product.PRODUCT_SATURATEDFAT,
+// 		Fiber:        product.PRODUCT_FIBER,
+// 	}
+
+// 	responseData, _ := SendRequest[dto.ProductRequest, dto.SNResponse](url, *requestData)
+
+// 	p, err := service.productRepo.GetProductById(product_id)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+// 	}
+
+// 	p.PRODUCT_GRADING = responseData.Grade
+// 	err = service.productRepo.UpdateProduct(p)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error")
+// 	}
+
+// 	return nil
+// }
+
+// func (service *productService) CreateProduct(c echo.Context) error {
+// 	productForm, err := ParseProductForm(c)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// 	}
+
+// 	// Gunakan ProcessImage untuk menyimpan gambar secara lokal
+// 	imagePath, err := service.uploader.ProcessImage(c, service.uploader.productPath)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+// 	}
+
+// 	// Dapatkan path lokal untuk gambar
+// 	realImagePath := imagePath
+
+// 	// Lanjutkan dengan proses lain
+// 	UserToken, err := service.tokenRepo.UserToken(middleware.GetToken(c))
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
+// 	}
+
+// 	store, err := service.storeService.GetStoreByUserId(UserToken.ID)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Store not found")
+// 	}
+
+// 	pt_id, err := service.ptService.GetProductTypeIdByType(productForm.PT_Type)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Product type not found")
+// 	}
+// 	product_id := uuid.New().String()
+
+// 	product := models.Product{
+// 		PRODUCT_ID:           product_id,
+// 		PRODUCT_NAME:         productForm.ProductName,
+// 		PRODUCT_PRICE:        productForm.ProductPrice,
+// 		PRODUCT_DESC:         productForm.ProductDesc,
+// 		PRODUCT_ISSHOW:       0,
+// 		PRODUCT_LEMAKTOTAL:   productForm.ProductLemakTotal,
+// 		PRODUCT_PROTEIN:      productForm.ProductProtein,
+// 		PRODUCT_KARBOHIDRAT:  productForm.ProductKarbohidrat,
+// 		PRODUCT_GARAM:        productForm.ProductGaram,
+// 		PRODUCT_SERVINGSIZE:  productForm.ProductServingSize,
+// 		PRODUCT_PICTURE:      realImagePath, // Gambar disimpan secara lokal
+// 		PRODUCT_EXPSHOW:      time.Now(),
+// 		PRODUCT_ENERGI:       productForm.ProductEnergi,
+// 		PRODUCT_GULA:         productForm.ProductGula,
+// 		PRODUCT_SATURATEDFAT: productForm.ProductSaturatedFat,
+// 		PRODUCT_FIBER:        productForm.ProductFiber,
+// 		CreatedAt:            time.Now(),
+// 		UpdatedAt:            time.Now(),
+// 		STORE_ID:             store.STORE_ID,
+// 		PT_ID:                pt_id,
+// 	}
+
+// 	err = service.productRepo.CreateProduct(&product)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// Lanjutkan dengan proses lainnya...
+
+	
+// 	url := os.Getenv("PYTHON_API") + "/grade"
+
+// 	requestData := &dto.ProductRequest{
+// 		Energy:       product.PRODUCT_ENERGI,
+// 		Protein:      product.PRODUCT_PROTEIN,
+// 		Fat:          product.PRODUCT_LEMAKTOTAL,
+// 		Carbs:        product.PRODUCT_KARBOHIDRAT,
+// 		Sugar:        product.PRODUCT_GULA,
+// 		Salt:         product.PRODUCT_GARAM,
+// 		SaturatedFat: product.PRODUCT_SATURATEDFAT,
+// 		Fiber:        product.PRODUCT_FIBER,
+// 	}
+
+// 	responseData, _ := SendRequest[dto.ProductRequest, dto.SNResponse](url, *requestData)
+
+// 	p, err := service.productRepo.GetProductById(product_id)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+// 	}
+
+// 	p.PRODUCT_GRADING = responseData.Grade
+// 	err = service.productRepo.UpdateProduct(p)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error")
+// 	}
+
+// 	return nil
+// }
+
+
+// Function to generate a random grade (A/B/C/D/E)
+func generateRandomGrade() string {
+	// Initialize random seed
+	rand.Seed(time.Now().UnixNano())
+	
+	// Create a slice with possible grades
+	grades := []string{"A", "B", "C", "D", "E"}
+	
+	// Generate a random index and select a grade using rand.Intn for older Go versions
+	randomGrade := grades[rand.Intn(len(grades))]
+	
+	return randomGrade
+}
+
+// func (service *productService) CreateProduct(c echo.Context) error {
+// 	productForm, err := ParseProductForm(c)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// 	}
+
+// 	// Validate token and get user info
+// 	UserToken, err := service.tokenRepo.UserToken(middleware.GetToken(c))
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
+// 	}
+
+// 	store, err := service.storeService.GetStoreByUserId(UserToken.ID)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Store not found")
+// 	}
+
+// 	pt_id, err := service.ptService.GetProductTypeIdByType(productForm.PT_Type)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Product type not found")
+// 	}
+
+// 	// Upload image
+// 	imagePath, err := service.uploader.ProcessImageProduct(c)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+// 	}
+
+// 	product_id := uuid.New().String()
+	
+// 	product := models.Product{
+// 		PRODUCT_ID:           product_id,
+// 		PRODUCT_NAME:         productForm.ProductName,
+// 		PRODUCT_PRICE:        productForm.ProductPrice,
+// 		PRODUCT_DESC:         productForm.ProductDesc,
+// 		PRODUCT_ISSHOW:       0,
+// 		PRODUCT_LEMAKTOTAL:   productForm.ProductLemakTotal,
+// 		PRODUCT_PROTEIN:      productForm.ProductProtein,
+// 		PRODUCT_KARBOHIDRAT:  productForm.ProductKarbohidrat,
+// 		PRODUCT_GARAM:        productForm.ProductGaram,
+// 		PRODUCT_SERVINGSIZE:  productForm.ProductServingSize,
+// 		PRODUCT_PICTURE:      imagePath, // Path to locally stored image
+// 		PRODUCT_EXPSHOW:      time.Now(),
+// 		PRODUCT_ENERGI:       productForm.ProductEnergi,
+// 		PRODUCT_GULA:         productForm.ProductGula,
+// 		PRODUCT_SATURATEDFAT: productForm.ProductSaturatedFat,
+// 		PRODUCT_FIBER:        productForm.ProductFiber,
+// 		CreatedAt:            time.Now(),
+// 		UpdatedAt:            time.Now(),
+// 		STORE_ID:             store.STORE_ID,
+// 		PT_ID:                pt_id,
+// 	}
+
+// 	err = service.productRepo.CreateProduct(&product)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+// 	}
+
+// 	// Calculate product grade
+// 	url := os.Getenv("PYTHON_API") + "/grade"
+// 	requestData := &dto.ProductRequest{
+// 		Energy:       product.PRODUCT_ENERGI,
+// 		Protein:      product.PRODUCT_PROTEIN,
+// 		Fat:          product.PRODUCT_LEMAKTOTAL,
+// 		Carbs:        product.PRODUCT_KARBOHIDRAT,
+// 		Sugar:        product.PRODUCT_GULA,
+// 		Salt:         product.PRODUCT_GARAM,
+// 		SaturatedFat: product.PRODUCT_SATURATEDFAT,
+// 		Fiber:        product.PRODUCT_FIBER,
+// 	}
+
+// 	responseData, err := SendRequest[dto.ProductRequest, dto.SNResponse](url, *requestData)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to calculate product grade")
+// 	}
+
+// 	p, err := service.productRepo.GetProductById(product_id)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+// 	}
+
+// 	p.PRODUCT_GRADING = responseData.Grade
+// 	err = service.productRepo.UpdateProduct(p)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error")
+// 	}
+
+// 	// return c.JSON(http.StatusCreated, map[string]interface{}{
+// 	// 	"status":  "success",
+// 	// 	"message": "Product created successfully",
+// 	// 	"data": map[string]interface{}{
+// 	// 		"product_id": product_id,
+// 	// 	},
+// 	// })
+
+	
+// 	// // Initialize random seed - this is important for truly random results
+// 	// rand.Seed(time.Now().UnixNano())
+	
+// 	// // Create a slice with possible grades
+// 	// grades := []string{"A", "B", "C", "D", "E"}
+	
+// 	// // Generate a random index and select a grade using compatible method
+// 	// randomGrade := grades[rand.Intn(len(grades))]
+	
+// 	// // Retrieve the product
+// 	// p, err := service.productRepo.GetProductById(product_id)
+// 	// if err != nil {
+// 	// 	return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+// 	// }
+	
+// 	// // Assign the random grade and update the product
+// 	// p.PRODUCT_GRADING = randomGrade
+// 	// err = service.productRepo.UpdateProduct(p)
+// 	// if err != nil {
+// 	// 	return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error")
+// 	// }
+
+// 	// return c.JSON(http.StatusCreated, map[string]interface{}{
+// 	// 	"status":  "success",
+// 	// 	"message": "Product created successfully",
+// 	// 	"data": map[string]interface{}{
+// 	// 		"product_id": product_id,
+// 	// 		"grade":      randomGrade,
+// 	// 	},
+// 	// })
+
+// 	// return c.JSON(http.StatusCreated, map[string]interface{}{
+// 	// 	"status":  "success",
+// 	// 	"message": "Product created successfully",
+// 	// 	"data": map[string]interface{}{
+// 	// 		"product_id": product_id,
+// 	// 	},
+// 	// })
+
+// 	return nil
+// }
+
 func (service *productService) CreateProduct(c echo.Context) error {
 	productForm, err := ParseProductForm(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	imagePath, err := service.uploader.ProcessImageProduct(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	err = godotenv.Load(".env")
-	if err != nil {
-		return err
-	}
-	realImagePath := os.Getenv("IMAGE_PATH") + imagePath
-
+	// Validate token and get user info
 	UserToken, err := service.tokenRepo.UserToken(middleware.GetToken(c))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
@@ -165,8 +500,41 @@ func (service *productService) CreateProduct(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Product type not found")
 	}
-	product_id := uuid.New().String()
 
+	// ======= 🖼️ Upload image ke folder publik =======
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Image upload required")
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to open uploaded file")
+	}
+	defer src.Close()
+
+	// Simpan ke folder uploads dengan nama unik
+	imageID := uuid.New().String()
+	ext := filepath.Ext(file.Filename)
+	imageName := fmt.Sprintf("%s%s", imageID, ext)
+	imagePath := filepath.Join("uploads", imageName)
+
+	dst, err := os.Create(imagePath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save image")
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to copy image")
+	}
+
+	// URL publik (misal untuk konsumsi di Android/Python)
+	serverHost := os.Getenv("APP_HOST") // e.g. http://localhost:8080
+	publicImageURL := fmt.Sprintf("%s/uploads/%s", serverHost, imageName)
+
+	// ======= 🛒 Simpan data produk =======
+	product_id := uuid.New().String()
 	product := models.Product{
 		PRODUCT_ID:           product_id,
 		PRODUCT_NAME:         productForm.ProductName,
@@ -178,7 +546,7 @@ func (service *productService) CreateProduct(c echo.Context) error {
 		PRODUCT_KARBOHIDRAT:  productForm.ProductKarbohidrat,
 		PRODUCT_GARAM:        productForm.ProductGaram,
 		PRODUCT_SERVINGSIZE:  productForm.ProductServingSize,
-		PRODUCT_PICTURE:      realImagePath,
+		PRODUCT_PICTURE:      publicImageURL, // ✅ simpan URL publik
 		PRODUCT_EXPSHOW:      time.Now(),
 		PRODUCT_ENERGI:       productForm.ProductEnergi,
 		PRODUCT_GULA:         productForm.ProductGula,
@@ -190,13 +558,12 @@ func (service *productService) CreateProduct(c echo.Context) error {
 		PT_ID:                pt_id,
 	}
 
-	err = service.productRepo.CreateProduct(&product)
-	if err != nil {
-		return err
+	if err := service.productRepo.CreateProduct(&product); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	// Hitung grade produk dari API Python
 	url := os.Getenv("PYTHON_API") + "/grade"
-
 	requestData := &dto.ProductRequest{
 		Energy:       product.PRODUCT_ENERGI,
 		Protein:      product.PRODUCT_PROTEIN,
@@ -208,7 +575,10 @@ func (service *productService) CreateProduct(c echo.Context) error {
 		Fiber:        product.PRODUCT_FIBER,
 	}
 
-	responseData, _ := SendRequest[dto.ProductRequest, dto.SNResponse](url, *requestData)
+	responseData, err := SendRequest[dto.ProductRequest, dto.SNResponse](url, *requestData)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to calculate product grade")
+	}
 
 	p, err := service.productRepo.GetProductById(product_id)
 	if err != nil {
@@ -216,13 +586,22 @@ func (service *productService) CreateProduct(c echo.Context) error {
 	}
 
 	p.PRODUCT_GRADING = responseData.Grade
-	err = service.productRepo.UpdateProduct(p)
-	if err != nil {
+	if err := service.productRepo.UpdateProduct(p); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error")
 	}
 
+	// return c.JSON(http.StatusCreated, map[string]interface{}{
+	// 	"status":  "success",
+	// 	"message": "Product created successfully",
+	// 	"data": map[string]interface{}{
+	// 		"product_id": product_id,
+	// 		"image_url":  publicImageURL,
+	// 		"grade":      responseData.Grade,
+	// 	},
+	// })
 	return nil
 }
+
 
 func (service *productService) GetProductById(id string) (*dto.ProductResponse, error) {
 	p, err := service.productRepo.GetProductById(id)
@@ -302,11 +681,11 @@ func (service *productService) UpdateProduct(c echo.Context, id string) error {
 
 	file, _ := c.FormFile("file")
 	if file != nil {
-		imagePath, err := service.uploader.ProcessImageProduct(c)
+		imagePath, err := service.uploader.ProcessImage(c, service.uploader.productPath)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		service.uploader.DeleteImageProduct(product.PRODUCT_PICTURE)
+		service.uploader.DeleteImage(product.PRODUCT_PICTURE,  service.uploader.productPath)
 		err = godotenv.Load(".env")
 		if err != nil {
 			return err
@@ -363,33 +742,64 @@ func (service *productService) UpdateProduct(c echo.Context, id string) error {
 		product.PT_ID = pt_id
 	}
 
-	err = godotenv.Load(".env")
+	// err = godotenv.Load(".env")
+	// if err != nil {
+	// 	return err
+	// }
+	// url := os.Getenv("PYTHON_API") + "/grade"
+
+	// requestData := &dto.ProductRequest{
+	// 	Id:           product.PRODUCT_ID,
+	// 	Energy:       product.PRODUCT_ENERGI,
+	// 	Protein:      product.PRODUCT_PROTEIN,
+	// 	Fat:          product.PRODUCT_LEMAKTOTAL,
+	// 	Carbs:        product.PRODUCT_KARBOHIDRAT,
+	// 	Sugar:        product.PRODUCT_GULA,
+	// 	Salt:         product.PRODUCT_GARAM,
+	// 	SaturatedFat: product.PRODUCT_SATURATEDFAT,
+	// 	Fiber:        product.PRODUCT_FIBER,
+	// }
+
+	// responseData, err := SendRequest[dto.ProductRequest, dto.SNResponse](url, *requestData)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// product.PRODUCT_GRADING = responseData.Grade
+	// product.UpdatedAt = time.Now()
+
+	// return service.productRepo.UpdateProduct(product)
+
+	
+	
+	// Initialize random seed - this is important for truly random results
+	rand.Seed(time.Now().UnixNano())
+	
+	// Create a slice with possible grades
+	grades := []string{"A", "B", "C", "D", "E"}
+	
+	// Generate a random index and select a grade using compatible method
+	randomGrade := grades[rand.Intn(len(grades))]
+	
+	// // Retrieve the product
+	// p, err := service.productRepo.GetProductById(id)
+	// if err != nil {
+	// 	return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+	// }
+	
+	// Assign the random grade and update the product
+	product.PRODUCT_GRADING = randomGrade
+	err = service.productRepo.UpdateProduct(product)
 	if err != nil {
-		return err
-	}
-	url := os.Getenv("PYTHON_API") + "/grade"
-
-	requestData := &dto.ProductRequest{
-		Id:           product.PRODUCT_ID,
-		Energy:       product.PRODUCT_ENERGI,
-		Protein:      product.PRODUCT_PROTEIN,
-		Fat:          product.PRODUCT_LEMAKTOTAL,
-		Carbs:        product.PRODUCT_KARBOHIDRAT,
-		Sugar:        product.PRODUCT_GULA,
-		Salt:         product.PRODUCT_GARAM,
-		SaturatedFat: product.PRODUCT_SATURATEDFAT,
-		Fiber:        product.PRODUCT_FIBER,
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error")
 	}
 
-	responseData, err := SendRequest[dto.ProductRequest, dto.SNResponse](url, *requestData)
-	if err != nil {
-		return err
-	}
-
-	product.PRODUCT_GRADING = responseData.Grade
+	// product.PRODUCT_GRADING = responseData.Grade
 	product.UpdatedAt = time.Now()
 
 	return service.productRepo.UpdateProduct(product)
+
+
 }
 
 func (service *productService) DeleteProduct(id string) error {
@@ -397,7 +807,7 @@ func (service *productService) DeleteProduct(id string) error {
 	if err != nil {
 		return err
 	}
-	service.uploader.DeleteImageProduct(product.PRODUCT_PICTURE)
+	service.uploader.DeleteImage(product.PRODUCT_PICTURE,  service.uploader.productPath)
 	return service.productRepo.DeleteProduct(id)
 }
 

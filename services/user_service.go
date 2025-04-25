@@ -6,10 +6,18 @@ import (
 	"golang-template/models"
 	"golang-template/repository"
 	"golang-template/utils"
+
+	"fmt"
+	"io"
+	// "mime/multipart"
+	"path/filepath"
+
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+	"strings"
+	"math"  // For Go 1.20-1.21
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -179,9 +187,128 @@ func (s *userService) GetClassCalories(c echo.Context) (float64, string, error) 
 	return existingUser.Calories, existingUser.Classification, nil
 }
 
+// func (s *userService) UpdateUser(updateForm *dto.RegisterForm, c echo.Context) error {
+// 	err := godotenv.Load(".env")
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	tokenUser, err := s.tokenRepo.UserToken(middleware.GetToken(c))
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
+// 	}
+
+// 	existingUser, err := s.userRepo.GetUserById(tokenUser.ID)
+// 	if err != nil {
+// 		return echo.NewHTTPError(http.StatusInternalServerError, "error retrieving user")
+// 	}
+
+// 	updatedUser, err := ParseUserForm(c)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	file, _ := c.FormFile("file")
+// 	if file != nil {
+// 		imagePath, err := s.uploader.ProcessImageUser(c)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		s.uploader.DeleteImage(s.uploader.userPath, existingUser.Profpic)
+// 		err = godotenv.Load(".env")
+// 		if err != nil {
+// 			return err
+// 		}
+// 		realImagePath := os.Getenv("IMAGE_PATH") + imagePath
+// 		existingUser.Profpic = realImagePath
+// 	}
+
+// 	if updatedUser.Name != "" {
+// 		existingUser.Name = updatedUser.Name
+// 	}
+
+// 	if updatedUser.Email != "" {
+// 		existingUser.Email = updatedUser.Email
+// 	}
+
+// 	if updatedUser.Gender != 0 {
+// 		existingUser.Gender = updatedUser.Gender
+// 	}
+
+// 	if updatedUser.Telp != "" {
+// 		existingUser.Telp = updatedUser.Telp
+// 	}
+
+// 	if updatedUser.Birthdate != "" {
+// 		existingUser.Birthdate = updatedUser.Birthdate
+// 	}
+
+// 	if updatedUser.Height != 0 {
+// 		existingUser.Height = updatedUser.Height / 100
+// 	}
+
+// 	if updatedUser.Weight != 0 {
+// 		existingUser.Weight = updatedUser.Weight
+// 	}
+
+// 	if updatedUser.WeightGoal != 0 {
+// 		existingUser.WeightGoal = updatedUser.WeightGoal
+// 	}
+
+// 	if updatedUser.AL_TYPE != 0 {
+// 		existingUser.AL_ID, err = s.alRepo.GetActivityLevelIdByType(updatedUser.AL_TYPE)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	if updatedUser.HG_TYPE != 0 {
+// 		existingUser.HG_ID, err = s.hgRepo.GetIdByType(updatedUser.HG_TYPE)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	AL, err := s.alRepo.GetActivityLevelById(existingUser.AL_ID)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// Calculate Age
+// 	birthdate, err := time.Parse("2006-01-02", existingUser.Birthdate)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	now := time.Now()
+// 	years := now.Year() - birthdate.Year()
+// 	if now.YearDay() < birthdate.YearDay() {
+// 		years--
+// 	}
+
+// 	url := os.Getenv("PYTHON_API") + "/classify"
+// 	requestData := &dto.UserRequest{
+// 		Id:            existingUser.ID,
+// 		Gender:        int(existingUser.Gender),
+// 		Age:           float64(years),
+// 		BodyWeight:    existingUser.Weight,
+// 		BodyHeight:    existingUser.Height,
+// 		ActivityLevel: int(AL.AL_TYPE),
+// 	}
+
+// 	responseData, err := SendRequest[dto.UserRequest, dto.UserResponse](url, *requestData)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	existingUser.Calories = responseData.Calories
+// 	existingUser.Classification = responseData.Classification
+// 	return s.userRepo.UpdateUser(existingUser)
+
+// }
+
 func (s *userService) UpdateUser(updateForm *dto.RegisterForm, c echo.Context) error {
-	err := godotenv.Load(".env")
-	if err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		return err
 	}
 
@@ -200,60 +327,71 @@ func (s *userService) UpdateUser(updateForm *dto.RegisterForm, c echo.Context) e
 		return err
 	}
 
-	file, _ := c.FormFile("file")
+	// ====== 🖼️ Upload image (kalau ada) ======
+	file, err := c.FormFile("file")
 	if file != nil {
-		imagePath, err := s.uploader.ProcessImageUser(c)
+		src, err := file.Open()
 		if err != nil {
-			return err
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to open uploaded file")
 		}
-		s.uploader.DeleteImage(s.uploader.userPath, existingUser.Profpic)
-		err = godotenv.Load(".env")
+		defer src.Close()
+
+		imageID := uuid.New().String()
+		ext := filepath.Ext(file.Filename)
+		imageName := fmt.Sprintf("%s%s", imageID, ext)
+		imagePath := filepath.Join("uploads", imageName)
+
+		dst, err := os.Create(imagePath)
 		if err != nil {
-			return err
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save image")
 		}
-		realImagePath := os.Getenv("IMAGE_PATH") + imagePath
-		existingUser.Profpic = realImagePath
+		defer dst.Close()
+
+		if _, err := io.Copy(dst, src); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to copy image")
+		}
+
+		// Hapus foto lama jika ada (opsional)
+		if existingUser.Profpic != "" {
+			oldFile := strings.TrimPrefix(existingUser.Profpic, os.Getenv("APP_HOST")+"/")
+			_ = os.Remove(oldFile) // Tidak fatal kalau gagal
+		}
+
+		publicImageURL := fmt.Sprintf("%s/uploads/%s", os.Getenv("APP_HOST"), imageName)
+		existingUser.Profpic = publicImageURL
 	}
 
+	// ====== 📝 Update field lain ======
 	if updatedUser.Name != "" {
 		existingUser.Name = updatedUser.Name
 	}
-
 	if updatedUser.Email != "" {
 		existingUser.Email = updatedUser.Email
 	}
-
 	if updatedUser.Gender != 0 {
 		existingUser.Gender = updatedUser.Gender
 	}
-
 	if updatedUser.Telp != "" {
 		existingUser.Telp = updatedUser.Telp
 	}
-
 	if updatedUser.Birthdate != "" {
 		existingUser.Birthdate = updatedUser.Birthdate
 	}
-
 	if updatedUser.Height != 0 {
-		existingUser.Height = updatedUser.Height / 100
+		existingUser.Height = updatedUser.Height
 	}
-
 	if updatedUser.Weight != 0 {
 		existingUser.Weight = updatedUser.Weight
 	}
-
 	if updatedUser.WeightGoal != 0 {
 		existingUser.WeightGoal = updatedUser.WeightGoal
 	}
-
 	if updatedUser.AL_TYPE != 0 {
 		existingUser.AL_ID, err = s.alRepo.GetActivityLevelIdByType(updatedUser.AL_TYPE)
 		if err != nil {
 			return err
 		}
 	}
-
 	if updatedUser.HG_TYPE != 0 {
 		existingUser.HG_ID, err = s.hgRepo.GetIdByType(updatedUser.HG_TYPE)
 		if err != nil {
@@ -261,20 +399,18 @@ func (s *userService) UpdateUser(updateForm *dto.RegisterForm, c echo.Context) e
 		}
 	}
 
+	// ====== 🔥 Hitung Kalori & Klasifikasi ======
 	AL, err := s.alRepo.GetActivityLevelById(existingUser.AL_ID)
 	if err != nil {
 		return err
 	}
 
-	// Calculate Age
 	birthdate, err := time.Parse("2006-01-02", existingUser.Birthdate)
 	if err != nil {
 		return err
 	}
-
-	now := time.Now()
-	years := now.Year() - birthdate.Year()
-	if now.YearDay() < birthdate.YearDay() {
+	years := time.Now().Year() - birthdate.Year()
+	if time.Now().YearDay() < birthdate.YearDay() {
 		years--
 	}
 
@@ -290,14 +426,17 @@ func (s *userService) UpdateUser(updateForm *dto.RegisterForm, c echo.Context) e
 
 	responseData, err := SendRequest[dto.UserRequest, dto.UserResponse](url, *requestData)
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to classify user")
 	}
 
-	existingUser.Calories = responseData.Calories
+	existingUser.Calories = math.Round(responseData.Calories)
 	existingUser.Classification = responseData.Classification
-	return s.userRepo.UpdateUser(existingUser)
 
+	// Simpan ke database
+	return s.userRepo.UpdateUser(existingUser)
 }
+
+
 
 func (s *userService) DeleteUser(c echo.Context) error {
 	tokenUser, err := s.tokenRepo.UserByToken(middleware.GetToken(c))

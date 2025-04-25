@@ -33,6 +33,8 @@ func InitRouter(e *echo.Echo) {
 	productTypeController := controllers.NewProductTypeController()
 	transactionController := controllers.NewTransactionController()
 	snController := controllers.NewScannedNutritionController()
+	
+	e.Static("/uploads", "uploads")
 
 	authGroup := e.Group("/api/auth")
 	authGroup.POST("/register", authController.Register)

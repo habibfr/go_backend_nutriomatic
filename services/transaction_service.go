@@ -8,6 +8,12 @@ import (
 	"os"
 	"time"
 
+	"fmt"
+	"io"
+	// "mime/multipart"
+	"path/filepath"
+	"net/http"
+	
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
@@ -180,43 +186,125 @@ func (s *transactionService) DeleteTransaction(c echo.Context) error {
 	return s.tscRepo.DeleteTransaction(id)
 }
 
+// func (s *transactionService) UploadProofPayment(c echo.Context) error {
+// 	userToken, err := s.tokenRepo.UserToken(middleware.GetToken(c))
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	store, err := s.storeRepo.GetStoreByUserId(userToken.ID)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	tsc, err := s.tscRepo.FindAllNewTransactionsWithoutPagination(store.STORE_ID)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	imagePath, err := s.uploader.ProcessImageProof(c)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = godotenv.Load(".env")
+// 	if err != nil {
+// 		return err
+// 	}
+// 	realImagePath := os.Getenv("IMAGE_PATH") + imagePath
+
+// 	// loop each transactions
+// 	for _, transaction := range *tsc {
+// 		transaction.TSC_BUKTI = realImagePath
+// 		transaction.UpdatedAt = time.Now()
+// 		if err := s.tscRepo.UpdateTransaction(&transaction); err != nil {
+// 			return err
+// 		}
+
+// 	}
+// 	return nil
+// }
+
 func (s *transactionService) UploadProofPayment(c echo.Context) error {
 	userToken, err := s.tokenRepo.UserToken(middleware.GetToken(c))
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
 	}
 
 	store, err := s.storeRepo.GetStoreByUserId(userToken.ID)
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusInternalServerError, "Store not found")
 	}
 
 	tsc, err := s.tscRepo.FindAllNewTransactionsWithoutPagination(store.STORE_ID)
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to retrieve transactions")
 	}
 
-	imagePath, err := s.uploader.ProcessImageProof(c)
+	// ===== 🖼️ Upload Bukti Pembayaran =====
+	file, err := c.FormFile("file")
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusBadRequest, "Proof of payment image is required")
 	}
-	err = godotenv.Load(".env")
-	if err != nil {
-		return err
-	}
-	realImagePath := os.Getenv("IMAGE_PATH") + imagePath
 
-	// loop each transactions
+	src, err := file.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to open uploaded file")
+	}
+	defer src.Close()
+
+	imageID := uuid.New().String()
+	ext := filepath.Ext(file.Filename)
+	imageName := fmt.Sprintf("%s%s", imageID, ext)
+	imagePath := filepath.Join("uploads", imageName)
+
+	dst, err := os.Create(imagePath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save image")
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to copy image")
+	}
+
+	// ===== 🌐 Simpan sebagai URL publik =====
+	if err := godotenv.Load(".env"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load .env")
+	}
+	publicImageURL := fmt.Sprintf("%s/uploads/%s", os.Getenv("APP_HOST"), imageName)
+
+	// ===== 🔁 Update semua transaksi =====
 	for _, transaction := range *tsc {
-		transaction.TSC_BUKTI = realImagePath
+		transaction.TSC_BUKTI = publicImageURL
 		transaction.UpdatedAt = time.Now()
-		if err := s.tscRepo.UpdateTransaction(&transaction); err != nil {
-			return err
-		}
 
+		if err := s.tscRepo.UpdateTransaction(&transaction); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update transaction")
+		}
 	}
+
 	return nil
+
+
+	// return c.JSON(http.StatusOK, map[string]interface{}{
+	// 	"status":  "success",
+	// 	"message": "Proof of payment uploaded",
+	// 	"url":     publicImageURL,
+	// })
+
+
+	// 	// loop each transactions
+// 	for _, transaction := range *tsc {
+// 		transaction.TSC_BUKTI = realImagePath
+// 		transaction.UpdatedAt = time.Now()
+// 		if err := s.tscRepo.UpdateTransaction(&transaction); err != nil {
+// 			return err
+// 		}
+
+// 	}
+// 	return nil
 }
+
 
 func (s *transactionService) FindAllNewTransactions(desc, page, pageSize int, search, sort, status, id string) (*[]models.Transaction, *dto.Pagination, error) {
 	return s.tscRepo.FindAllNewTransactions(desc, page, pageSize, search, sort, status, id)
